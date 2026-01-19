@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Example Name",
+    "birthdate": "2000-01-01",
+    "hint": "Sample hint",
+    "gender": "f"
+  },
+  {
+    "name": "Centus Test",
+    "birthdate": "2024-12-16"
+  }
+]

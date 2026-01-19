@@ -1,0 +1,25 @@
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    invalid-name,
+    too-many-locals,
+    too-many-arguments,
+    too-many-branches,
+    too-many-statements,
+    line-too-long,
+    C0103,  ; Java-style names from jnius
+    C0415,  ; import-outside-toplevel (common in Kivy)
+    W0406,  ; self-import (Android workaround)
+    E0401,  ; import-error (for platform-specific modules)
+    W0611,  ; unused-import (sometimes false positive)
+    W0613,  ; unused-argument
+    W0621,  ; redefined-outer-name
+
+[REPORTS]
+output-format = colorized
+
+[FORMAT]
+max-line-length = 120
+
