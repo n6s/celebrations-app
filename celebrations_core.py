@@ -118,10 +118,10 @@ def calculate_investment_projection(months_left, rate=0.15, target=1_000_000):
 
 # Shared Fraction Mapping
 fraction_map = {3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾'}
-fraction_nicknames = {
-    3: "Quarntide", 9: "Quarntide",
-    4: "Thrinday", 8: "Thrinday",
-    6: "Demi-Anniversaire"
+fraction_labels = {
+    3: "Quarter Birthday", 9: "Quarter Birthday",
+    4: "Third-Year Mark", 8: "Third-Year Mark",
+    6: "Half-Birthday"
 }
 
 # 🎉 Celebration Engines: calculate_celebrations, braille_life_line, lifespan_bar
@@ -183,9 +183,8 @@ def calculate_celebrations(data, target_dates):
                     person_messages[label].append(f"🎂 Happy {ordinal(age_years)} Birthday, {shortname}!")
                 if is_monthday and remainder_months in fraction_map:
                     frac_str = fraction_map[remainder_months]
-                    frac_nickname = fraction_nicknames.get(remainder_months, "")
-                    nickname_str = f" ({frac_nickname})" if frac_nickname else ""
-                    person_messages[label].append(f"📆 Happy {age_years}{frac_str} Fracday{nickname_str}, {shortname}!")
+                    frac_label = fraction_labels.get(remainder_months, "Fractional Birthday")
+                    person_messages[label].append(f"📆 Happy {age_years}{frac_str} {frac_label}, {shortname}!")
                     if remainder_months == 6 and should_include_investment_projection(age_years, remainder_months, gender, nonhuman, deceased):
                         try:
                             months_to_59_5 = max(0, int((59.5 * 12) - age_months))
@@ -284,7 +283,7 @@ def next_milestones_for(person, today):
     - Birthday
     - Centusday (every 100 days)
     - Kiloday (every 1000 days)
-    - Fracday (half-birthday)
+    - Quarter/Third/Half Birthday
     - Investment Half-Birthday
     - Lifespan percent progress (past 100%)
     - Braille brick (every 700 days / 100 weeks)
@@ -321,10 +320,7 @@ def next_milestones_for(person, today):
         next_frac_month = ((age_months // 12) + 1) * 12 + frac_months
         milestone_date = fractional_month_anniversary(birthdate, next_frac_month)
         milestone_year = next_frac_month // 12
-        label = f"📆 {milestone_year}{fraction_map[frac_months]} Fracday"
-        nickname = fraction_nicknames.get(frac_months)
-        if nickname:
-            label += f" ({nickname})"
+        label = f"📆 {milestone_year}{fraction_map[frac_months]} {fraction_labels.get(frac_months, 'Fractional Birthday')}"
         milestones.append((label, milestone_date))
 
         # 💸 Investment Check-in only on Half Birthday
@@ -430,7 +426,7 @@ def upcoming_milestone_dates_for(person, today):
     next_kiloday = ((age_days // 1000) + 1) * 1000
     dates.add(birthdate + timedelta(days=next_kiloday))
 
-    # 📆 Fracdays (like half-birthdays)
+    # 📆 Fractional birthdays (quarter/third/half)
     for frac_months in fraction_map:
         next_frac_month = ((age_months // 12) + 1) * 12 + frac_months
         dates.add(fractional_month_anniversary(birthdate, next_frac_month))

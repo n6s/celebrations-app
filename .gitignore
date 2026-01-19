@@ -26,3 +26,6 @@ env/
 
 # Local-only
 **/.vimcd/
+
+# Generated outputs
+celebrations.ics
