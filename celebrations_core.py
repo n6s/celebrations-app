@@ -120,7 +120,7 @@ def calculate_investment_projection(months_left, rate=0.15, target=1_000_000):
 fraction_map = {3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾'}
 fraction_labels = {
     3: "Quarter Birthday", 9: "Quarter Birthday",
-    4: "Third-Year Mark", 8: "Third-Year Mark",
+    4: "First Third", 8: "Second Third",
     6: "Half-Birthday"
 }
 
