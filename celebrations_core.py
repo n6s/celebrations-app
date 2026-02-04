@@ -59,24 +59,15 @@ def is_fractional_monthday(birthdate, today, age_months=None):
         return (False, None, None)
 
     if age_months is None:
-        age_months = calculate_age_months(birthdate, today)
+        age_months = (today.year - birthdate.year) * 12 + (today.month - birthdate.month)
+
+    expected_date = fractional_month_anniversary(birthdate, age_months)
+    if today != expected_date:
+        return (False, None, None)
 
     age_years = age_months // 12
     remainder_months = age_months % 12
-
-    expected_date = fractional_month_anniversary(birthdate, age_months)
-    max_day = monthrange(today.year, today.month)[1]
-
-    is_end_of_month_match = (
-        birthdate.day >= 28 and
-        today.day == max_day and
-        expected_date.month == today.month and
-        expected_date.year == today.year
-    )
-
-    is_match = today == expected_date or is_end_of_month_match
-
-    return (is_match, age_years, remainder_months)
+    return (True, age_years, remainder_months)
 
 def safe_monthday(year, month, day):
     try:
@@ -128,9 +119,14 @@ fraction_labels = {
 
 def calculate_age_months(birthdate, today):
     """Calculate age in months, accounting for end-of-month birthdays."""
-    rd = relativedelta(today, birthdate)
-    age_months = rd.years * 12 + rd.months
-    return age_months
+    if today < birthdate:
+        return 0
+
+    months_diff = (today.year - birthdate.year) * 12 + (today.month - birthdate.month)
+    anniv_day = min(birthdate.day, monthrange(today.year, today.month)[1])
+    if today.day < anniv_day:
+        months_diff -= 1
+    return months_diff
 
 def is_centusmonthiversary(birthdate, today):
     months = calculate_age_months(birthdate, today)
