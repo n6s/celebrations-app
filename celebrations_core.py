@@ -27,6 +27,14 @@ LIFE_EXPECTANCY = {
 }
 CONFIG_DIR = Path.home() / ".config/celebrations"
 CONFIG_PATH = CONFIG_DIR / "birthdays.json"
+MIN_SEQUENCE_LENGTH = 4
+MATH_CONSTANT_PREFIXES = {
+    "Pi": ("🥧", "31415926535897932384626433832795"),
+    "Euler's Number": ("📈", "27182818284590452353602874713526"),
+    "Golden Ratio": ("🌀", "16180339887498948482045868343656"),
+    "Tau": ("🔵", "62831853071795864769252867665590"),
+    "Square Root of 2": ("📐", "14142135623730950488016887242097"),
+}
 
 # 📂 File and Config Helpers: load_birthdays, save_birthdays, get_today
 
@@ -107,6 +115,57 @@ def calculate_investment_projection(months_left, rate=0.15, target=1_000_000):
     lump_sum = round(target / ((1 + rate / 12) ** months_left), 2)
     return monthly_investment, lump_sum
 
+def generate_sequence_milestones(min_length=MIN_SEQUENCE_LENGTH, max_length=7):
+    milestones = []
+    for length in range(min_length, max_length + 1):
+        ascending = ''.join(str(digit) for digit in range(1, length + 1))
+        descending = ''.join(str(digit) for digit in range(length, 0, -1))
+        milestones.append((int(ascending), "Ascending Number Sequence"))
+        milestones.append((int(descending), "Descending Number Sequence"))
+    return sorted(milestones)
+
+def generate_constant_day_milestones(min_length=4, max_length=6):
+    milestones = []
+    for label, (emoji, digits) in MATH_CONSTANT_PREFIXES.items():
+        for length in range(min_length, max_length + 1):
+            prefix_value = int(digits[:length])
+            milestones.append((prefix_value, label, emoji, digits[:length]))
+    return sorted(milestones)
+
+SEQUENCE_DAY_MILESTONES = generate_sequence_milestones()
+CONSTANT_DAY_MILESTONES = generate_constant_day_milestones()
+
+def get_number_sequence_milestone(days_old):
+    for milestone_day, label in SEQUENCE_DAY_MILESTONES:
+        if milestone_day == days_old:
+            return milestone_day, label
+    return None
+
+def get_constant_day_milestones(days_old):
+    return [
+        (milestone_day, label, emoji, prefix)
+        for milestone_day, label, emoji, prefix in CONSTANT_DAY_MILESTONES
+        if milestone_day == days_old
+    ]
+
+def next_sequence_day_milestones(days_old):
+    upcoming = []
+    seen_labels = set()
+    for milestone_day, label in SEQUENCE_DAY_MILESTONES:
+        if milestone_day > days_old and label not in seen_labels:
+            upcoming.append((milestone_day, label))
+            seen_labels.add(label)
+    return upcoming
+
+def next_constant_day_milestones(days_old):
+    next_days = []
+    seen_labels = set()
+    for milestone_day, label, emoji, prefix in CONSTANT_DAY_MILESTONES:
+        if milestone_day > days_old and label not in seen_labels:
+            next_days.append((milestone_day, label, emoji, prefix))
+            seen_labels.add(label)
+    return next_days
+
 # Shared Fraction Mapping
 fraction_map = {3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾'}
 fraction_labels = {
@@ -170,6 +229,8 @@ def calculate_celebrations(data, target_dates):
             is_kiloday = days_old % 1000 == 0
             is_centusday = days_old % 100 == 0 and not is_kiloday
             is_monthday, age_years, remainder_months = is_fractional_monthday(birthdate, target_date)
+            sequence_day = get_number_sequence_milestone(days_old)
+            constant_days = get_constant_day_milestones(days_old)
 
             if deceased:
                 if is_birthday:
@@ -199,6 +260,15 @@ def calculate_celebrations(data, target_dates):
                     ordinal_num = ordinal(kilo_count)
                     person_messages[label].append(f"🏆 Happy {ordinal_num} Kiloday ({days_old:,} days), {shortname}!")
                     person_messages[label].append(f"{shortname}'s life in {centus_count} Centusdays: {centus_bar}")
+                if sequence_day:
+                    _, sequence_label = sequence_day
+                    person_messages[label].append(
+                        f"🔢 Happy {sequence_label} ({days_old:,} days), {shortname}!"
+                    )
+                for _, constant_label, constant_emoji, prefix in constant_days:
+                    person_messages[label].append(
+                        f"{constant_emoji} Happy {constant_label} milestone: {prefix} days for {shortname}!"
+                    )
                 if not nonhuman:
                     milestones = PERCENT_MILESTONES.get(gender_key, {})
                     for percent, day in milestones.items():
@@ -312,6 +382,14 @@ def next_milestones_for(person, today):
     next_kiloday_date = birthdate + timedelta(days=next_kiloday)
     milestones.append((f"🏆 {ordinal(next_kiloday // 1000)} Kiloday ({next_kiloday:,} days)", next_kiloday_date))
 
+    # 🔢 Number Sequences
+    for milestone_day, label in next_sequence_day_milestones(days_old):
+        milestones.append((f"🔢 {label} ({milestone_day:,} days)", birthdate + timedelta(days=milestone_day)))
+
+    # 🧮 Mathematical Constants
+    for milestone_day, label, emoji, prefix in next_constant_day_milestones(days_old):
+        milestones.append((f"{emoji} {label} milestone ({prefix} days)", birthdate + timedelta(days=milestone_day)))
+
     for frac_months in fraction_map:
         next_frac_month = ((age_months // 12) + 1) * 12 + frac_months
         milestone_date = fractional_month_anniversary(birthdate, next_frac_month)
@@ -421,6 +499,14 @@ def upcoming_milestone_dates_for(person, today):
     # 🏆 Kiloday
     next_kiloday = ((age_days // 1000) + 1) * 1000
     dates.add(birthdate + timedelta(days=next_kiloday))
+
+    # 🔢 Number Sequences
+    for milestone_day, _ in next_sequence_day_milestones(age_days):
+        dates.add(birthdate + timedelta(days=milestone_day))
+
+    # 🧮 Mathematical Constants
+    for milestone_day, _, _, _ in next_constant_day_milestones(age_days):
+        dates.add(birthdate + timedelta(days=milestone_day))
 
     # 📆 Fractional birthdays (quarter/third/half)
     for frac_months in fraction_map:
