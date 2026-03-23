@@ -8,6 +8,7 @@ DONE:
 * Add interactive CLI support for `--add-anniversary`
 * Add wedding anniversary support via ~/.config/celebrations/anniversaries.json and shared CLI/iCal output
 * Add tenant-aware CLI support via `--tenant`, using ~/.config/celebrations/tenants/<tenant>/
+* Move notifier and systemd templates into the repo, with install script and example tenant env files
 * Add Upcoming Celebrations Button
 * Person Lookup
 * Date lookup, filter by person
@@ -94,3 +95,14 @@ DONE:
 * Fix back button behavior on Add screen so it returns to the new lookup screen instead of the removed today screen.
 * Replace Today button on Add screen now that Today screen is removed.
 * Remove switch_to_today() from lookup.py
+
+Repo-managed notifier files:
+* Canonical notifier script: `scripts/celebration-notifier.sh`
+* User systemd templates: `deploy/systemd/celebration-notifier.service` and `deploy/systemd/celebration-notifier.timer`
+* Installer: `scripts/install-user-files.sh [symlink|copy]`
+* Example tenant notifier config: `config/tenants/<tenant>/notifier.env.example`
+
+Recommended local deployment split:
+* Symlink or copy the script and systemd units from the repo into `~/bin` and `~/.config/systemd/user`
+* Keep real `notifier.env`, `birthdays.json`, and `anniversaries.json` under `~/.config/celebrations/tenants/`
+* Do not commit real tenant data or bot tokens

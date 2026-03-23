@@ -1,0 +1,9 @@
+[Unit]
+Description=Run celebration notifier daily
+
+[Timer]
+OnCalendar=*-*-* 06:50
+Persistent=true
+
+[Install]
+WantedBy=timers.target

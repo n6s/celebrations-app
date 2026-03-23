@@ -1,0 +1,6 @@
+[Unit]
+Description=Send daily birthday and celebration reminder
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/celebration-notifier.sh

@@ -29,3 +29,8 @@ env/
 
 # Generated outputs
 celebrations.ics
+
+# Optional local tenant config if someone stages personal data inside the repo tree
+config/tenants/**/notifier.env
+config/tenants/**/birthdays.json
+config/tenants/**/anniversaries.json
