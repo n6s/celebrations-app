@@ -5,7 +5,8 @@ Supports birthdays, anniversaries, centusdays (every 100 days), kilodays
 (every 1000 days), monthday fractions (like half-birthdays), and life
 expectancy achievements.
 
-Data is stored in ~/.config/celebrations/birthdays.json and anniversaries.json.
+Data is stored in ~/.config/celebrations/birthdays.json and anniversaries.json,
+or in tenant-specific files under ~/.config/celebrations/tenants/<tenant>/.
 
 Intended for daily use via cron or systemd, optionally piping stdout to Telegram or similar.
 
@@ -28,6 +29,7 @@ LIFE_EXPECTANCY = {
 CONFIG_DIR = Path.home() / ".config/celebrations"
 CONFIG_PATH = CONFIG_DIR / "birthdays.json"
 ANNIVERSARIES_PATH = CONFIG_DIR / "anniversaries.json"
+TENANTS_DIR = CONFIG_DIR / "tenants"
 MIN_SEQUENCE_LENGTH = 4
 MATH_CONSTANT_PREFIXES = {
     "Pi": ("🥧", "31415926535897932384626433832795"),
@@ -51,6 +53,34 @@ def load_birthdays(path):
 def load_anniversaries(path):
     return load_json_entries(path)
 
+def normalize_tenant_name(tenant):
+    if tenant is None:
+        return None
+    tenant_name = tenant.strip()
+    return tenant_name or None
+
+def tenant_config_dir(tenant):
+    tenant_name = normalize_tenant_name(tenant)
+    return TENANTS_DIR / tenant_name if tenant_name else CONFIG_DIR
+
+def resolve_config_paths(birthdays_path=None, anniversaries_path=None, tenant=None):
+    tenant_name = normalize_tenant_name(tenant)
+    if birthdays_path:
+        resolved_birthdays = Path(birthdays_path)
+    elif tenant_name:
+        resolved_birthdays = tenant_config_dir(tenant_name) / "birthdays.json"
+    else:
+        resolved_birthdays = CONFIG_PATH
+
+    if anniversaries_path:
+        resolved_anniversaries = Path(anniversaries_path)
+    elif tenant_name:
+        resolved_anniversaries = tenant_config_dir(tenant_name) / "anniversaries.json"
+    else:
+        resolved_anniversaries = ANNIVERSARIES_PATH
+
+    return resolved_birthdays, resolved_anniversaries
+
 def normalize_birthdays(data):
     return [{**entry, "entry_type": "birthday"} for entry in data]
 
@@ -73,8 +103,12 @@ def normalize_anniversaries(data):
     return normalized
 
 def load_all_celebrations(birthdays_path=None, anniversaries_path=None):
-    birthdays = normalize_birthdays(load_birthdays(birthdays_path or CONFIG_PATH))
-    anniversaries = normalize_anniversaries(load_anniversaries(anniversaries_path or ANNIVERSARIES_PATH))
+    resolved_birthdays, resolved_anniversaries = resolve_config_paths(
+        birthdays_path=birthdays_path,
+        anniversaries_path=anniversaries_path,
+    )
+    birthdays = normalize_birthdays(load_birthdays(resolved_birthdays))
+    anniversaries = normalize_anniversaries(load_anniversaries(resolved_anniversaries))
     return birthdays + anniversaries
 
 def save_birthdays(data, path):

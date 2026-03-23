@@ -7,6 +7,7 @@ KNOWN ISSUES/LIMITATIONS:
 DONE:
 * Add interactive CLI support for `--add-anniversary`
 * Add wedding anniversary support via ~/.config/celebrations/anniversaries.json and shared CLI/iCal output
+* Add tenant-aware CLI support via `--tenant`, using ~/.config/celebrations/tenants/<tenant>/
 * Add Upcoming Celebrations Button
 * Person Lookup
 * Date lookup, filter by person

@@ -6,17 +6,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Add celebrations-app/ to path
 
-CONFIG_PATH = Path.home() / ".config/celebrations/birthdays.json"
-
 def main():
-    from celebrations_core import (ANNIVERSARIES_PATH, get_today,
+    from celebrations_core import (get_today,
                                    load_all_celebrations, load_anniversaries,
                                    load_birthdays,
+                                   resolve_config_paths,
                                    save_birthdays)
     from utils import generate_ical_text, get_celebration_output
 
     parser = argparse.ArgumentParser(description="Celebrate birthdays, anniversaries, monthdays, and centusdays!")
     parser.add_argument("--all", action="store_true")
+    parser.add_argument("--tenant", type=str, help="Use tenant-specific data from ~/.config/celebrations/tenants/<tenant>/")
     parser.add_argument("--file", type=str)
     parser.add_argument("--anniversaries-file", type=str)
     parser.add_argument("--add", action="store_true")
@@ -33,8 +33,11 @@ def main():
 
     args = parser.parse_args()
 
-    filepath = Path(args.file) if args.file else CONFIG_PATH
-    anniversaries_filepath = Path(args.anniversaries_file) if args.anniversaries_file else ANNIVERSARIES_PATH
+    filepath, anniversaries_filepath = resolve_config_paths(
+        birthdays_path=args.file,
+        anniversaries_path=args.anniversaries_file,
+        tenant=args.tenant,
+    )
     data = load_birthdays(filepath)
 
     if args.add and args.add_anniversary:
@@ -49,6 +52,7 @@ def main():
         # Step 1: Pull actual upcoming data to find a real celebration
         _, upcoming = get_celebration_output(
             days_ahead=366,
+            tenant=args.tenant,
             config_path=filepath,
             anniversaries_path=anniversaries_filepath,
         )
@@ -74,6 +78,7 @@ def main():
             print("========================================")
             print(cli_command)
             messages, _ = get_celebration_output(
+                tenant=args.tenant,
                 config_path=filepath,
                 anniversaries_path=anniversaries_filepath,
                 **kwargs,
@@ -184,6 +189,7 @@ def main():
             days_ahead=args.upcoming or 0,
             markup=False,
             ical_mode=True,
+            tenant=args.tenant,
             config_path=filepath,
             anniversaries_path=anniversaries_filepath,
         )
@@ -202,6 +208,7 @@ def main():
         date=args.date,
         days_ahead=args.upcoming or 0,
         markup=False,
+        tenant=args.tenant,
         config_path=filepath,
         anniversaries_path=anniversaries_filepath,
     )

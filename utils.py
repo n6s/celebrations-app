@@ -2,15 +2,12 @@
 from collections import defaultdict
 from datetime import date as dt_date
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from celebrations_core import (ANNIVERSARIES_PATH, calculate_all_celebrations,
-                               get_today, load_all_celebrations,
+from celebrations_core import (calculate_all_celebrations, get_today,
+                               load_all_celebrations,
+                               resolve_config_paths,
                                upcoming_celebrations,
                                upcoming_milestone_dates_for)
-
-DEFAULT_CONFIG_PATH = Path.home() / ".config/celebrations/birthdays.json"
-DEFAULT_ANNIVERSARIES_PATH = ANNIVERSARIES_PATH
 
 def render_output(entries):
     lines = []
@@ -125,6 +122,7 @@ def get_celebration_output(
     days_ahead=0,
     markup=False,
     ical_mode=False,
+    tenant=None,
     config_path=None,
     anniversaries_path=None,
 ):
@@ -133,8 +131,11 @@ def get_celebration_output(
     Returns (messages: list of strings, tuples: raw event tuples)
     """
 
-    path = config_path or DEFAULT_CONFIG_PATH
-    anniversary_path = anniversaries_path or DEFAULT_ANNIVERSARIES_PATH
+    path, anniversary_path = resolve_config_paths(
+        birthdays_path=config_path,
+        anniversaries_path=anniversaries_path,
+        tenant=tenant,
+    )
     data = load_all_celebrations(path, anniversary_path)
 
     if isinstance(date, str):
