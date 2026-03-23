@@ -337,7 +337,7 @@ def calculate_celebrations(data, target_dates):
                             months_to_59_5 = max(0, int((59.5 * 12) - age_months))
                             invest_per_month, one_time = calculate_investment_projection(months_to_59_5)
                             years_to_go = round(months_to_59_5 / 12)
-                            person_messages[label].append(f"💸 Half-Birthday Check-in! If {shortname} starts investing ${abs(invest_per_month):,.2f} a month (or a one-time investment of ${one_time:,.2f}) at 15% annualized return for the next {years_to_go} years until age 59½ ({months_to_59_5} months), it could be worth $1,000,000! 🙃 But 15% is a stretch, and $1M only pays ~$40K/year. DYORDCAHODLFTW. 😎🧠💰🪙📈⏳🚀🌕")
+                            person_messages[label].append(f"💸 Half-Birthday Check-in! If {shortname} starts investing ${abs(invest_per_month):,.2f} a month (or a one-time investment of ${one_time:,.2f}) at 15% annualized return for the next {years_to_go} years until age 59½ ({months_to_59_5} months), it could be worth $1,000,000! 🙃 But 15% is a stretch, and even a 4% retirement withdrawal from $1M is only about $40K/year. Not a financial advisor. DYORDCAHODLFTW. 😎🧠💰🪙📈⏳🚀🌕")
                         except (OverflowError, ZeroDivisionError):
                             pass
                 if is_centusday:
