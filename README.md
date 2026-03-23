@@ -5,6 +5,8 @@ KNOWN ISSUES/LIMITATIONS:
 * Emojis fail to render in app, but works in Copy and iCal export, and in CLI.
 
 DONE:
+* Add interactive CLI support for `--add-anniversary`
+* Add wedding anniversary support via ~/.config/celebrations/anniversaries.json and shared CLI/iCal output
 * Add Upcoming Celebrations Button
 * Person Lookup
 * Date lookup, filter by person
@@ -91,4 +93,3 @@ DONE:
 * Fix back button behavior on Add screen so it returns to the new lookup screen instead of the removed today screen.
 * Replace Today button on Add screen now that Today screen is removed.
 * Remove switch_to_today() from lookup.py
-

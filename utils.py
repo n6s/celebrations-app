@@ -4,11 +4,13 @@ from datetime import date as dt_date
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from celebrations_core import (calculate_celebrations, get_today,
-                               load_birthdays, upcoming_celebrations,
+from celebrations_core import (ANNIVERSARIES_PATH, calculate_all_celebrations,
+                               get_today, load_all_celebrations,
+                               upcoming_celebrations,
                                upcoming_milestone_dates_for)
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config/celebrations/birthdays.json"
+DEFAULT_ANNIVERSARIES_PATH = ANNIVERSARIES_PATH
 
 def render_output(entries):
     lines = []
@@ -30,13 +32,16 @@ def extract_messages(entries, category_filter=None, markup=False):
         filtered = [entry for entry in entries if entry[-1] == category_filter]
 
     output = []
-    for msg, date, person, category in filtered:
+    for msg, _date, person, category in filtered:
         if category in ("label", "date_header"):
             output.append("")  # newline
         if category == "label" and person:
             gender = (person.get("gender") or "").lower()
             if markup:
-                color = "ff66cc" if gender == "f" else "3399ff"  # magenta / blue
+                if person.get("entry_type") == "anniversary":
+                    color = "cc8800"
+                else:
+                    color = "ff66cc" if gender == "f" else "3399ff"  # magenta / blue
                 msg = f"[color={color}]{msg}[/color]"
         output.append(msg)
     return output
@@ -66,7 +71,7 @@ def generate_ical_text(events, days_ahead=None):
         grouped[(person_name, date)].append(event)
 
     count = 0
-    for (name, date), group in grouped.items():
+    for (_name, date), group in grouped.items():
         primary = group[0]
         extras = group[1:]
 
@@ -114,14 +119,23 @@ def generate_ical_text(events, days_ahead=None):
 
     return "\n".join(lines), count
 
-def get_celebration_output(name=None, date=None, days_ahead=0, markup=False, ical_mode=False, config_path=None):
+def get_celebration_output(
+    name=None,
+    date=None,
+    days_ahead=0,
+    markup=False,
+    ical_mode=False,
+    config_path=None,
+    anniversaries_path=None,
+):
     """
     Shared logic for CLI and GUI to get celebration output.
     Returns (messages: list of strings, tuples: raw event tuples)
     """
 
     path = config_path or DEFAULT_CONFIG_PATH
-    data = load_birthdays(path)
+    anniversary_path = anniversaries_path or DEFAULT_ANNIVERSARIES_PATH
+    data = load_all_celebrations(path, anniversary_path)
 
     if isinstance(date, str):
         try:
@@ -162,7 +176,7 @@ def get_celebration_output(name=None, date=None, days_ahead=0, markup=False, ica
     if name and len(matches) == 1 and date == today:
         person = matches[0]
         milestone_dates = upcoming_milestone_dates_for(person, today)
-        results = calculate_celebrations([person], milestone_dates)
+        results = calculate_all_celebrations([person], milestone_dates)
 
         if ical_mode:
             return [], results  # Skip pretty messages for iCal mode
@@ -170,11 +184,14 @@ def get_celebration_output(name=None, date=None, days_ahead=0, markup=False, ica
         # Group by date
         grouped = defaultdict(list)
         for tup in results:
-            msg, dt, _, category = tup
+            _msg, dt, _, category = tup
             if category in ("label", "celebration"):
                 grouped[dt].append(tup)
 
-        messages.append(f"🔍 Upcoming Milestones for {person['name']}, born {person['birthdate']}:\n")
+        if person.get("entry_type") == "anniversary":
+            messages.append(f"🔍 Upcoming Milestones for {person['name']}, celebrated from {person['date']}:\n")
+        else:
+            messages.append(f"🔍 Upcoming Milestones for {person['name']}, born {person['birthdate']}:\n")
         for dt in sorted(grouped):
             messages.append(f"\n📅 {dt}")
             entries = extract_messages(grouped[dt], markup=markup)
@@ -182,7 +199,7 @@ def get_celebration_output(name=None, date=None, days_ahead=0, markup=False, ica
         return messages, results
 
     # 🗓️ DATE (+ optional name filter)
-    results = calculate_celebrations(people, date)
+    results = calculate_all_celebrations(people, date)
     messages = extract_messages(results, category_filter=("date_header", "label", "celebration"), markup=markup)
 
     if name and matches:
@@ -194,4 +211,3 @@ def get_celebration_output(name=None, date=None, days_ahead=0, markup=False, ica
         messages.insert(0, "🎉 Today's Celebrations:\n")
 
     return messages, results
-

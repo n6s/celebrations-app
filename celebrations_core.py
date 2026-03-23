@@ -1,10 +1,11 @@
 # celebrations_core.py
 """
-Track and celebrate personal milestones based on birthdates.
-Supports birthdays, centusdays (every 100 days), kilodays (every 1000 days),
-monthday fractions (like half-birthdays), and life expectancy achievements.
+Track and celebrate personal milestones based on birthdates and anniversaries.
+Supports birthdays, anniversaries, centusdays (every 100 days), kilodays
+(every 1000 days), monthday fractions (like half-birthdays), and life
+expectancy achievements.
 
-Data is stored in ~/.config/celebrations/birthdays.json.
+Data is stored in ~/.config/celebrations/birthdays.json and anniversaries.json.
 
 Intended for daily use via cron or systemd, optionally piping stdout to Telegram or similar.
 
@@ -13,7 +14,6 @@ Author: Roger 🧠🎉
 
 import json
 import math
-import sys
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -27,6 +27,7 @@ LIFE_EXPECTANCY = {
 }
 CONFIG_DIR = Path.home() / ".config/celebrations"
 CONFIG_PATH = CONFIG_DIR / "birthdays.json"
+ANNIVERSARIES_PATH = CONFIG_DIR / "anniversaries.json"
 MIN_SEQUENCE_LENGTH = 4
 MATH_CONSTANT_PREFIXES = {
     "Pi": ("🥧", "31415926535897932384626433832795"),
@@ -36,13 +37,45 @@ MATH_CONSTANT_PREFIXES = {
     "Square Root of 2": ("📐", "14142135623730950488016887242097"),
 }
 
-# 📂 File and Config Helpers: load_birthdays, save_birthdays, get_today
+# 📂 File and Config Helpers: load_birthdays, load_anniversaries, save_birthdays, get_today
 
-def load_birthdays(path):
+def load_json_entries(path):
     if not path.exists():
         return []
     with open(path, encoding='utf-8') as f:
         return json.load(f)
+
+def load_birthdays(path):
+    return load_json_entries(path)
+
+def load_anniversaries(path):
+    return load_json_entries(path)
+
+def normalize_birthdays(data):
+    return [{**entry, "entry_type": "birthday"} for entry in data]
+
+def normalize_anniversaries(data):
+    normalized = []
+    for entry in data:
+        name = (entry.get("name") or entry.get("couple_name") or "").strip()
+        anniversary_date = entry.get("date") or entry.get("married_date")
+        if not name or not anniversary_date:
+            continue
+
+        normalized_entry = {**entry}
+        normalized_entry["name"] = name
+        normalized_entry["date"] = anniversary_date
+        normalized_entry["entry_type"] = "anniversary"
+        normalized_entry["kind"] = normalized_entry.get("kind") or (
+            "wedding_anniversary" if "married_date" in entry else "anniversary"
+        )
+        normalized.append(normalized_entry)
+    return normalized
+
+def load_all_celebrations(birthdays_path=None, anniversaries_path=None):
+    birthdays = normalize_birthdays(load_birthdays(birthdays_path or CONFIG_PATH))
+    anniversaries = normalize_anniversaries(load_anniversaries(anniversaries_path or ANNIVERSARIES_PATH))
+    return birthdays + anniversaries
 
 def save_birthdays(data, path):
     timestamp = datetime.now().strftime("%s")
@@ -90,6 +123,20 @@ def ordinal(n):
     else:
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
+
+def celebration_sort_key(item):
+    _, target_date, person, category = item
+    category_order = {"label": 0, "celebration": 1}
+    name = ""
+    if isinstance(person, dict):
+        name = person.get("name", "").lower()
+    return (target_date, name, category_order.get(category, 99))
+
+def merge_celebration_results(*result_sets):
+    merged = []
+    for result_set in result_sets:
+        merged.extend(result_set)
+    return sorted(merged, key=celebration_sort_key)
 
 def get_percent_life_milestones(expectancy_years, max_percent=150):
     return {
@@ -173,6 +220,15 @@ fraction_labels = {
     4: "One-Third Birthday", 8: "Two-Thirds Birthday",
     6: "Half-Birthday"
 }
+ANNIVERSARY_LABELS = {
+    "anniversary": "Anniversary",
+    "wedding_anniversary": "Wedding Anniversary",
+}
+ANNIVERSARY_MILESTONES = {
+    25: "Silver",
+    50: "Golden",
+    60: "Diamond",
+}
 
 # 🎉 Celebration Engines: calculate_celebrations, braille_life_line, lifespan_bar
 
@@ -248,7 +304,7 @@ def calculate_celebrations(data, target_dates):
                             invest_per_month, one_time = calculate_investment_projection(months_to_59_5)
                             years_to_go = round(months_to_59_5 / 12)
                             person_messages[label].append(f"💸 Half-Birthday Check-in! If {shortname} starts investing ${abs(invest_per_month):,.2f} a month (or a one-time investment of ${one_time:,.2f}) at 15% annualized return for the next {years_to_go} years until age 59½ ({months_to_59_5} months), it could be worth $1,000,000! 🙃 But 15% is a stretch, and $1M only pays ~$40K/year. DYORDCAHODLFTW. 😎🧠💰🪙📈⏳🚀🌕")
-                        except Exception:
+                        except (OverflowError, ZeroDivisionError):
                             pass
                 if is_centusday:
                     ordinal_num = ordinal(days_old // 100)
@@ -314,6 +370,78 @@ def calculate_celebrations(data, target_dates):
 
     return results
 
+def anniversary_kind_label(entry):
+    return ANNIVERSARY_LABELS.get(entry.get("kind"), "Anniversary")
+
+def anniversary_short_name(entry):
+    return (entry.get("short_name") or entry.get("name") or "").strip()
+
+def anniversary_display_label(entry):
+    hint = (entry.get("hint") or "").strip()
+    name = entry["name"]
+    return f"{name} ({hint})" if hint else name
+
+def calculate_anniversary_celebrations(data, target_dates):
+    if not isinstance(target_dates, list):
+        target_dates = [target_dates]
+
+    results = []
+
+    for target_date in target_dates:
+        anniversary_messages = defaultdict(list)
+        anniversary_lookup = {}
+
+        for entry in data:
+            if entry.get("entry_type") != "anniversary":
+                continue
+
+            date_text = entry.get("date")
+            if not date_text:
+                continue
+
+            anniversary_date = datetime.strptime(date_text, "%Y-%m-%d").date()
+            if target_date < anniversary_date:
+                continue
+
+            observed_date = safe_monthday(target_date.year, anniversary_date.month, anniversary_date.day)
+            years = target_date.year - anniversary_date.year
+            if target_date != observed_date or years < 1:
+                continue
+
+            label = anniversary_display_label(entry)
+            anniversary_lookup[label] = entry
+            short_name = anniversary_short_name(entry)
+            anniversary_type = anniversary_kind_label(entry)
+            anniversary_messages[label].append(
+                f"💍 Happy {ordinal(years)} {anniversary_type}, {short_name}!"
+            )
+
+            if years % 5 == 0:
+                milestone_name = ANNIVERSARY_MILESTONES.get(years)
+                if milestone_name:
+                    anniversary_messages[label].append(
+                        f"✨ {milestone_name} {anniversary_type} milestone!"
+                    )
+                else:
+                    anniversary_messages[label].append(
+                        f"✨ Milestone {anniversary_type}: {years} years!"
+                    )
+
+        for label, entries in sorted(anniversary_messages.items()):
+            entry = anniversary_lookup.get(label)
+            if entry:
+                label_text = f"{entry['name']} ({entry.get('hint')})..." if entry.get("hint") else f"{entry['name']}..."
+                results.append((label_text, target_date, entry, "label"))
+            for msg in entries:
+                results.append((msg, target_date, entry, "celebration"))
+
+    return results
+
+def calculate_all_celebrations(data, target_dates):
+    birthdays = calculate_celebrations(data, target_dates)
+    anniversaries = calculate_anniversary_celebrations(data, target_dates)
+    return merge_celebration_results(birthdays, anniversaries)
+
 def braille_life_line(days_old):
     """
     Convert age in days into a visual braille life timeline.
@@ -328,7 +456,9 @@ def braille_life_line(days_old):
         dot = i % 8
         dots[cell] |= (1 << dot)
 
-    def _braille_char(byte): return chr(0x2800 + byte) if byte else "⠀"
+    def _braille_char(byte):
+        return chr(0x2800 + byte) if byte else "⠀"
+
     return ''.join(_braille_char(b) for b in dots)
 
 def lifespan_bar(percent, width=20):
@@ -390,11 +520,11 @@ def next_milestones_for(person, today):
     for milestone_day, label, emoji, prefix in next_constant_day_milestones(days_old):
         milestones.append((f"{emoji} {label} milestone ({prefix} days)", birthdate + timedelta(days=milestone_day)))
 
-    for frac_months in fraction_map:
+    for frac_months, fraction_symbol in fraction_map.items():
         next_frac_month = ((age_months // 12) + 1) * 12 + frac_months
         milestone_date = fractional_month_anniversary(birthdate, next_frac_month)
         milestone_year = next_frac_month // 12
-        label = f"📆 {milestone_year}{fraction_map[frac_months]} {fraction_labels.get(frac_months, 'Fractional Birthday')}"
+        label = f"📆 {milestone_year}{fraction_symbol} {fraction_labels.get(frac_months, 'Fractional Birthday')}"
         milestones.append((label, milestone_date))
 
         # 💸 Investment Check-in only on Half Birthday
@@ -433,6 +563,30 @@ def next_milestones_for(person, today):
 
     return sorted(milestones, key=lambda tup: tup[1])
 
+def upcoming_anniversary_milestone_dates_for(entry, today):
+    anniversary_date = datetime.strptime(entry.get("date"), "%Y-%m-%d").date()
+    if today < anniversary_date:
+        return [anniversary_date]
+
+    dates = set()
+    this_year = safe_monthday(today.year, anniversary_date.month, anniversary_date.day)
+    next_anniversary = this_year if this_year >= today else safe_monthday(
+        today.year + 1, anniversary_date.month, anniversary_date.day
+    )
+    dates.add(next_anniversary)
+
+    next_years = max(1, next_anniversary.year - anniversary_date.year)
+    next_milestone_years = ((max(next_years, 1) - 1) // 5 + 1) * 5
+    milestone_date = safe_monthday(
+        anniversary_date.year + next_milestone_years,
+        anniversary_date.month,
+        anniversary_date.day,
+    )
+    if milestone_date >= today:
+        dates.add(milestone_date)
+
+    return sorted(dates)
+
 # 10,000 hours
 def hour_milestone_info(birthdate, today, interval=10_000):
     days_old = (today - birthdate).days
@@ -451,9 +605,9 @@ def upcoming_celebrations(data, today, days_ahead=4):
     upcoming = []
     for offset in range(1, days_ahead + 1):
         future = today + timedelta(days=offset)
-        future_msgs = calculate_celebrations(data, future)
+        future_msgs = calculate_all_celebrations(data, future)
         if future_msgs:
-            upcoming.append(("📅 [{}]".format(future.isoformat()), future, None, "date_header"))
+            upcoming.append((f"📅 [{future.isoformat()}]", future, None, "date_header"))
             for item in future_msgs:
                 if isinstance(item, tuple) and len(item) == 4:
                     upcoming.append(item)
@@ -463,16 +617,14 @@ def upcoming_celebrations(data, today, days_ahead=4):
     return upcoming
 
 def today_celebrations(data, today):
-    base = calculate_celebrations(data, today)
+    base = calculate_all_celebrations(data, today)
     return base if base else []
 
-def upcoming_milestone_dates_for(person, today):
+def upcoming_birthday_milestone_dates_for(person, today):
     """
     Return a list of upcoming celebration dates for a person.
     These will later be passed to `calculate_celebrations()`.
     """
-    from datetime import timedelta
-
     birthdate = datetime.strptime(person.get("birthdate"), "%Y-%m-%d").date()
     if not birthdate:
         return []
@@ -537,11 +689,16 @@ def upcoming_milestone_dates_for(person, today):
         dates.add(birthdate + timedelta(days=round((1000 / 12) * 365.25)))
 
     # 🕰️ 10,000 hour
-    milestone_hours, milestone_date, _ = hour_milestone_info(birthdate, today)
+    _, milestone_date, _ = hour_milestone_info(birthdate, today)
     if milestone_date > today:
         dates.add(milestone_date)
 
     return sorted(dates)
+
+def upcoming_milestone_dates_for(person, today):
+    if person.get("entry_type") == "anniversary":
+        return upcoming_anniversary_milestone_dates_for(person, today)
+    return upcoming_birthday_milestone_dates_for(person, today)
 
 def upcoming_milestone_celebrations(person, today, limit=20):
     milestones = next_milestones_for(person, today)
