@@ -12,7 +12,7 @@ def main():
                                    load_birthdays,
                                    resolve_config_paths,
                                    save_birthdays)
-    from utils import generate_ical_text, get_celebration_output
+    from utils import generate_ical_text, get_celebration_output, get_monthly_budget_output
 
     parser = argparse.ArgumentParser(description="Celebrate birthdays, anniversaries, monthdays, and centusdays!")
     parser.add_argument("--all", action="store_true")
@@ -24,6 +24,13 @@ def main():
     parser.add_argument("--date", type=str)
     parser.add_argument("--init", action="store_true")
     parser.add_argument("--upcoming", nargs="?", const=4, type=int)
+    parser.add_argument(
+        "--monthly-budget",
+        nargs="?",
+        const=1,
+        type=int,
+        help="Show upcoming birthdays remaining this month, or across N months, for budgeting",
+    )
     parser.add_argument("--name", type=str)
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--ical", action="store_true", help="Export upcoming milestones to an iCal file")
@@ -201,6 +208,17 @@ def main():
                 f.write(ical_text)
             print(f"✅ Exported {count} events to celebrations.ics")
         sys.exit(0)
+
+    if args.monthly_budget is not None:
+        messages = get_monthly_budget_output(
+            name=args.name,
+            date=args.date,
+            months_ahead=args.monthly_budget,
+            tenant=args.tenant,
+            config_path=filepath,
+        )
+        print("\n".join(messages))
+        return
 
     # Otherwise, show results in terminal
     messages, _ = get_celebration_output(

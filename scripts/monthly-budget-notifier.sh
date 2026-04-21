@@ -10,7 +10,6 @@ send_tenant() {
   local tenant="$1"
   local env_file="$TENANTS_ROOT/$tenant/notifier.env"
   local message
-  local nonempty_lines
 
   if [[ ! -f "$env_file" ]]; then
     echo "Missing tenant notifier config: $env_file" >&2
@@ -25,14 +24,7 @@ send_tenant() {
   : "${CHAT_ID:?Missing CHAT_ID in $env_file}"
   : "${BOT_TOKEN:?Missing BOT_TOKEN in $env_file}"
 
-  message="$(python3 "$REPO_DIR/cli/celebrations.py" --tenant "$tenant")"
-  nonempty_lines="$(printf '%s\n' "$message" | sed '/^[[:space:]]*$/d')"
-
-  if [[ "$nonempty_lines" == "🎉 Today's Celebrations:" ]]; then
-    message="🎉 Today's Celebrations:
-
-No events today."
-  fi
+  message="$(python3 "$REPO_DIR/cli/celebrations.py" --tenant "$tenant" --monthly-budget)"
 
   if [[ "${DRY_RUN:-0}" == "1" ]]; then
     printf '[%s]\n' "$tenant"

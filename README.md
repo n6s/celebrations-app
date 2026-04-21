@@ -98,7 +98,9 @@ DONE:
 
 Repo-managed notifier files:
 * Canonical notifier script: `scripts/celebration-notifier.sh`
+* Monthly budget notifier script: `scripts/monthly-budget-notifier.sh`
 * User systemd templates: `deploy/systemd/celebration-notifier.service` and `deploy/systemd/celebration-notifier.timer`
+* Monthly budget systemd templates: `deploy/systemd/celebration-budget-notifier.service` and `deploy/systemd/celebration-budget-notifier.timer`
 * Installer: `scripts/install-user-files.sh [symlink|copy]`
 * Example tenant notifier config: `config/tenants/<tenant>/notifier.env.example`
 

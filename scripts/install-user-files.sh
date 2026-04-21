@@ -35,12 +35,24 @@ install_file \
   "$USER_BIN_DIR/celebration-notifier.sh"
 
 install_file \
+  "$REPO_DIR/scripts/monthly-budget-notifier.sh" \
+  "$USER_BIN_DIR/monthly-budget-notifier.sh"
+
+install_file \
   "$REPO_DIR/deploy/systemd/celebration-notifier.service" \
   "$SYSTEMD_USER_DIR/celebration-notifier.service"
 
 install_file \
   "$REPO_DIR/deploy/systemd/celebration-notifier.timer" \
   "$SYSTEMD_USER_DIR/celebration-notifier.timer"
+
+install_file \
+  "$REPO_DIR/deploy/systemd/celebration-budget-notifier.service" \
+  "$SYSTEMD_USER_DIR/celebration-budget-notifier.service"
+
+install_file \
+  "$REPO_DIR/deploy/systemd/celebration-budget-notifier.timer" \
+  "$SYSTEMD_USER_DIR/celebration-budget-notifier.timer"
 
 if command -v systemctl >/dev/null 2>&1; then
   systemctl --user daemon-reload

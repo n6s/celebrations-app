@@ -15,6 +15,7 @@ Author: Roger 🧠🎉
 
 import json
 import math
+import os
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -26,7 +27,8 @@ LIFE_EXPECTANCY = {
     'm': 75.8,
     'f': 81.1
 }
-CONFIG_DIR = Path.home() / ".config/celebrations"
+XDG_CONFIG_ROOT = Path(os.environ["XDG_CONFIG_HOME"]) if os.environ.get("XDG_CONFIG_HOME") else Path.home() / ".config"
+CONFIG_DIR = XDG_CONFIG_ROOT / "celebrations"
 CONFIG_PATH = CONFIG_DIR / "birthdays.json"
 ANNIVERSARIES_PATH = CONFIG_DIR / "anniversaries.json"
 TENANTS_DIR = CONFIG_DIR / "tenants"
@@ -124,6 +126,14 @@ def get_today(override_date=None):
 
 # 🗖️ Date Calculations
 
+def month_window_end(start_date, months_ahead=1):
+    if months_ahead < 1:
+        raise ValueError("months_ahead must be at least 1")
+
+    final_month = start_date.replace(day=1) + relativedelta(months=+(months_ahead - 1))
+    last_day = monthrange(final_month.year, final_month.month)[1]
+    return final_month.replace(day=last_day)
+
 def fractional_month_anniversary(birthdate, months):
     target_date = birthdate + relativedelta(months=+months)
     day = min(birthdate.day, monthrange(target_date.year, target_date.month)[1])
@@ -150,6 +160,10 @@ def safe_monthday(year, month, day):
     except ValueError:
         next_month = datetime(year, month % 12 + 1, 1)
         return (next_month - timedelta(days=1)).date()
+
+def next_birthday_date(birthdate, today):
+    this_year = safe_monthday(today.year, birthdate.month, birthdate.day)
+    return this_year if this_year >= today else safe_monthday(today.year + 1, birthdate.month, birthdate.day)
 
 def ordinal(n):
     if 10 <= n % 100 <= 20:
@@ -650,6 +664,22 @@ def upcoming_celebrations(data, today, days_ahead=4):
                     print(f"[WARN] Skipping malformed celebration item: {item}")
     return upcoming
 
+def upcoming_budget_birthdays(data, today, months_ahead=1):
+    end_date = month_window_end(today, months_ahead=months_ahead)
+    upcoming = []
+
+    for person in data:
+        birthdate_text = person.get("birthdate")
+        if not birthdate_text or person.get("deceased", False):
+            continue
+
+        birthdate = datetime.strptime(birthdate_text, "%Y-%m-%d").date()
+        birthday_date = next_birthday_date(birthdate, today)
+        if today <= birthday_date <= end_date:
+            upcoming.append((birthday_date, person, birthday_date.year - birthdate.year))
+
+    return sorted(upcoming, key=lambda item: (item[0], item[1].get("name", "").lower()))
+
 def today_celebrations(data, today):
     base = calculate_all_celebrations(data, today)
     return base if base else []
@@ -674,8 +704,7 @@ def upcoming_birthday_milestone_dates_for(person, today):
     dates = set()
 
     # 🎂 Next Birthday
-    this_year = safe_monthday(today.year, birthdate.month, birthdate.day)
-    next_birthday = this_year if this_year >= today else safe_monthday(today.year + 1, birthdate.month, birthdate.day)
+    next_birthday = next_birthday_date(birthdate, today)
     dates.add(next_birthday)
 
     # 💯 Centusday

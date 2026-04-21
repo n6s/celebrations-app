@@ -1,0 +1,6 @@
+[Unit]
+Description=Send monthly birthday budgeting reminder
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/monthly-budget-notifier.sh

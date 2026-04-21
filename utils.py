@@ -5,7 +5,9 @@ from datetime import datetime, timedelta
 
 from celebrations_core import (calculate_all_celebrations, get_today,
                                load_all_celebrations,
+                               load_birthdays,
                                resolve_config_paths,
+                               upcoming_budget_birthdays,
                                upcoming_celebrations,
                                upcoming_milestone_dates_for)
 
@@ -115,6 +117,71 @@ def generate_ical_text(events, days_ahead=None):
     lines.append("END:VCALENDAR")
 
     return "\n".join(lines), count
+
+def get_monthly_budget_output(
+    name=None,
+    date=None,
+    months_ahead=1,
+    tenant=None,
+    config_path=None,
+):
+    path, _anniversary_path = resolve_config_paths(
+        birthdays_path=config_path,
+        tenant=tenant,
+    )
+    data = load_birthdays(path)
+
+    if isinstance(date, str):
+        try:
+            date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return [f"❌ Invalid date format: {date}. Please use YYYY-MM-DD."]
+
+    if months_ahead < 1:
+        return ["❌ Monthly budget range must be at least 1 month."]
+
+    today = date or get_today()
+
+    matches = []
+    if name:
+        matches = [person for person in data if name.lower() in person["name"].lower()]
+        if not matches:
+            return [f"No match found for '{name}'"]
+
+    people = matches if matches else data
+    budget_birthdays = upcoming_budget_birthdays(people, today, months_ahead=months_ahead)
+
+    if not budget_birthdays:
+        if months_ahead == 1:
+            return ["💸 No upcoming birthdays remain in this month."]
+        return [f"💸 No upcoming birthdays found in the next {months_ahead} months."]
+
+    if name and len(matches) == 1:
+        header = f"💸 Monthly birthday budget heads-up for {matches[0]['name']}:\n"
+    elif months_ahead == 1:
+        header = "💸 Monthly birthday budget heads-up for the rest of this month:\n"
+    else:
+        header = f"💸 Monthly birthday budget heads-up for the next {months_ahead} months:\n"
+
+    messages = [header]
+    current_month = None
+
+    for birthday_date, person, age in budget_birthdays:
+        month_label = birthday_date.strftime("%B %Y")
+        if month_label != current_month:
+            messages.append("")
+            messages.append(f"📅 {month_label}")
+            current_month = month_label
+
+        display_name = person["name"]
+        if person.get("hint"):
+            display_name = f"{display_name} ({person['hint']})"
+
+        messages.append(
+            f"🎂 {birthday_date.strftime('%a')} {birthday_date.day} - {display_name} turns {age}"
+        )
+
+    return messages
 
 def get_celebration_output(
     name=None,
