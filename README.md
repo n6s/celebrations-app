@@ -1,4 +1,7 @@
 TO DO:
+* Multi-tenant Telegram and Cloudflare direction is captured in `docs/telegram-cloudflare-roadmap.md`.
+* Next recommended slice: run a Python Worker feasibility spike with `python-dateutil`, D1, and synthetic celebration output.
+* Choose a new hosted-product name and separate Telegram bot for the Cloudflare track, leaving the existing local bot in service during development.
 
 KNOWN ISSUES/LIMITATIONS:
 * Android soft keyboard quirks (Gboard / gesture typing not supported).
