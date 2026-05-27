@@ -218,6 +218,13 @@ future restore flow.
 
 ## Rollout Slices
 
+Status update:
+
+- The `partymath` Cloudflare Worker has been scaffolded and deployed to `workers.dev`.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and a one-time bootstrap token are stored as Cloudflare secrets.
+- Telegram webhook registration is live against `https://partymath.rogerpbrown.workers.dev/telegram/webhook`.
+- The next implementation slice is Telegram command handling on synthetic data before any D1 migration.
+
 ### Slice 1: Python Worker Feasibility Spike
 
 - Scaffold a Python Worker in a new `deploy/cloudflare/` area.

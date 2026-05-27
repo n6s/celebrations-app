@@ -1,6 +1,7 @@
 TO DO:
 * Multi-tenant Telegram and Cloudflare direction is captured in `docs/telegram-cloudflare-roadmap.md`.
-* Next recommended slice: run a Python Worker feasibility spike with `python-dateutil`, D1, and synthetic celebration output.
+* Current Cloudflare track: the `partymath` Worker is live on `workers.dev`, with Telegram bot and webhook secrets stored in Cloudflare and the webhook registered.
+* Next recommended slice: implement the first real Telegram command handlers on top of the Worker using synthetic data first.
 * Choose a new hosted-product name and separate Telegram bot for the Cloudflare track, leaving the existing local bot in service during development.
 
 KNOWN ISSUES/LIMITATIONS:

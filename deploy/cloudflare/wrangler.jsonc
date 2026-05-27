@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "partymath",
+  "main": "src/index.py",
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["python_workers", "disable_python_external_sdk"],
+  "workers_dev": true,
+  "secrets": {
+    "required": [
+      "TELEGRAM_BOT_TOKEN",
+      "TELEGRAM_WEBHOOK_SECRET",
+      "PARTYMATH_ADMIN_TOKEN"
+    ]
+  }
+}
