@@ -83,6 +83,74 @@ def resolve_config_paths(birthdays_path=None, anniversaries_path=None, tenant=No
 
     return resolved_birthdays, resolved_anniversaries
 
+
+def all_entries_for_tenant(tenant):
+    return list(tenant.get("birthdays", [])) + list(tenant.get("anniversaries", []))
+
+
+def next_entry_id(entries, prefix):
+    existing = {entry.get("id") for entry in entries if entry.get("id")}
+    counter = 1
+    while True:
+        candidate = f"{prefix}-{counter:03d}"
+        if candidate not in existing:
+            return candidate
+        counter += 1
+
+
+def find_entry_by_id(tenant, entry_id):
+    for bucket in ("birthdays", "anniversaries"):
+        entries = tenant.get(bucket, [])
+        for index, entry in enumerate(entries):
+            if entry.get("id") == entry_id:
+                return bucket, index, entry
+    return None
+
+
+def create_birthday_entry(tenant, name, birthdate, hint=None):
+    tenant_bdays = tenant.setdefault("birthdays", [])
+    new_entry = {
+        "id": next_entry_id(tenant_bdays, "b"),
+        "entry_type": "birthday",
+        "name": name,
+        "birthdate": birthdate,
+    }
+    if hint:
+        new_entry["hint"] = hint
+    tenant_bdays.append(new_entry)
+    return new_entry
+
+
+def create_anniversary_entry(
+    tenant,
+    name,
+    anniversary_date,
+    kind="wedding_anniversary",
+    hint=None,
+):
+    tenant_anniversaries = tenant.setdefault("anniversaries", [])
+    new_entry = {
+        "id": next_entry_id(tenant_anniversaries, "a"),
+        "entry_type": "anniversary",
+        "name": name,
+        "date": anniversary_date,
+        "kind": kind,
+    }
+    if hint:
+        new_entry["hint"] = hint
+    tenant_anniversaries.append(new_entry)
+    return new_entry
+
+
+def delete_entry_by_id(tenant, entry_id):
+    lookup = find_entry_by_id(tenant, entry_id)
+    if not lookup:
+        return None
+
+    bucket, index, entry = lookup
+    return tenant[bucket].pop(index)
+
+
 def normalize_birthdays(data):
     return [{**entry, "entry_type": "birthday"} for entry in data]
 

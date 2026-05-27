@@ -11,5 +11,15 @@
       "TELEGRAM_WEBHOOK_SECRET",
       "PARTYMATH_ADMIN_TOKEN"
     ]
+  },
+  "d1_databases": [
+    {
+      "binding": "PARTYMATH_DB",
+      "database_name": "partymath-cloudflare",
+      "database_id": "c918b2da-360d-44d7-a2a6-ec3cb37b6c56"
+    }
+  ],
+  "triggers": {
+    "crons": ["* * * * *"]
   }
 }

@@ -21,6 +21,14 @@ deploy/cloudflare/.dev.vars
 deploy/cloudflare/.dev.vars.*
 deploy/cloudflare/.env
 deploy/cloudflare/.env.*
+/.env
+/.env.cloudflare
+/.env.local
+/.env.dev
+/.env.test
+/.env.prod
+scripts/.env
+scripts/.env.cloudflare
 
 # Build/artifacts
 .buildozer/
@@ -31,6 +39,8 @@ deploy/cloudflare/.env.*
 .DS_Store
 .idea/
 .vscode/
+*.swp
+*.swo
 
 # Local-only
 **/.vimcd/

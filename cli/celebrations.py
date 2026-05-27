@@ -8,6 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Add celebrati
 
 def main():
     from celebrations_core import (get_today,
+                                   all_entries_for_tenant,
+                                   create_anniversary_entry,
+                                   create_birthday_entry,
+                                   delete_entry_by_id,
+                                   find_entry_by_id,
                                    load_all_celebrations, load_anniversaries,
                                    load_birthdays,
                                    resolve_config_paths,
@@ -55,6 +60,42 @@ def main():
         print("🧪 Running test mode...\n")
 
         today = get_today()
+
+        def _run_fixture_crud_checks():
+            tenant = {
+                "id": "tenant-fixture",
+                "name": "Fixture Tenant",
+                "birthdays": [],
+                "anniversaries": [],
+            }
+            print("🧪 Fixture CRUD checks (in-memory):")
+            birthday = create_birthday_entry(tenant, "Fixture Birthday", "1999-01-02", hint="fixture")
+            anniversary = create_anniversary_entry(
+                tenant,
+                "Fixture Anniversary",
+                "2010-04-15",
+                kind="wedding_anniversary",
+                hint="fixture",
+            )
+
+            found_birthday = find_entry_by_id(tenant, birthday["id"])
+            found_anniversary = find_entry_by_id(tenant, anniversary["id"])
+            if not (found_birthday and found_anniversary):
+                print("❌ Fixture find failed.")
+                return False
+
+            print(f"✅ Added/found entries: {birthday['id']} + {anniversary['id']}")
+
+            delete_entry_by_id(tenant, birthday["id"])
+            delete_entry_by_id(tenant, anniversary["id"])
+            if all_entries_for_tenant(tenant):
+                print("❌ Fixture cleanup failed.")
+                return False
+            print("✅ Fixture CRUD checks passed.")
+            return True
+
+        if not _run_fixture_crud_checks():
+            sys.exit(1)
 
         # Step 1: Pull actual upcoming data to find a real celebration
         _, upcoming = get_celebration_output(

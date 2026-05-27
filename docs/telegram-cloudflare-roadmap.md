@@ -179,9 +179,16 @@ tenants
 - daily_notification_time
 - notifications_enabled
 
+chat_settings
+- chat_id
+- notify_hour_utc
+- notify_minute_utc
+- is_enabled
+
 memberships
 - tenant_id
-- telegram_user_id
+- chat_id
+- is_default
 - role
 
 celebrations
@@ -206,10 +213,11 @@ telegram_updates
 - received_at
 
 notification_deliveries
+- chat_id
 - tenant_id
 - local_date
 - sent_at
-- result
+- success
 ```
 
 `telegram_updates.update_id` prevents repeated webhook delivery from applying
@@ -223,16 +231,19 @@ Status update:
 - The `partymath` Cloudflare Worker has been scaffolded and deployed to `workers.dev`.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and a one-time bootstrap token are stored as Cloudflare secrets.
 - Telegram webhook registration is live against `https://partymath.rogerpbrown.workers.dev/telegram/webhook`.
-- The next implementation slice is Telegram command handling on synthetic data before any D1 migration.
+- Tenant Telegram command handling is now implemented in the Worker (`/start`, `/today`, `/upcoming`, `/list`, `/find`, `/add`, `/delete`) using tenant fixture datasets.
+- D1-aware persistence has been added for tenants, commands, and replay guards when `PARTYMATH_DB` is bound (with memory fallback when absent).
+- `/admin/tenant-state` plus D1 health visibility is available for admin verification.
+- Scheduled reminder scaffolding is now added: `/start` seeds per-chat reminder time into D1, scheduled runs scan due chat/tenant pairs, and `partymath_delivery_ledger` prevents duplicate sends per tenant/day.
 
 ### Slice 1: Python Worker Feasibility Spike
 
 - Scaffold a Python Worker in a new `deploy/cloudflare/` area.
 - Package and import `python-dateutil`, which is required by the existing
   `relativedelta` calculation logic.
-- Exercise a small shared calculation subset against synthetic birthday and
+- Exercise a small shared calculation subset against fixture birthday and
   anniversary data.
-- Bind a local or staging D1 database and read synthetic celebration rows.
+- Bind a local or staging D1 database and read tenant celebration rows.
 - Expose a test `fetch()` route that returns calculated celebration output.
 - Run a local scheduled-handler smoke test.
 - Do not connect a real Telegram webhook or import real tenant data.
@@ -244,7 +255,7 @@ Acceptance:
 
 - A Python Worker can execute representative existing calculation rules.
 - `python-dateutil` packages and imports successfully in the Worker toolchain.
-- Both D1 reads and a scheduled invocation work with synthetic records.
+- Both D1 reads and a scheduled invocation work with tenant records.
 - The outcome is documented clearly enough to confirm Python or choose
   TypeScript before broader migration work starts.
 
@@ -296,7 +307,8 @@ Acceptance:
   webhook; leave the existing local bot untouched.
 - Port the tested Telegram command surface first.
 - Configure webhook-secret verification and dry-run scheduled delivery.
-- Import synthetic or copied test tenant data only.
+- Import tenant fixture or copied test tenant data only.
+- Confirm admin-visible D1 tenant state before scheduled rollout (`/admin/tenant-state`).
 
 Acceptance:
 
@@ -335,12 +347,36 @@ Acceptance:
 - Do not assume Python Worker parity from documentation alone; validate this
   application's date calculations and dependency packaging in Slice 1.
 - Validate current repo state before choosing a slice; this roadmap is a
-  direction document, not proof that a feature has shipped.
+direction document, not proof that a feature has shipped.
 
 ## Recommended Next Slice
 
-Implement Slice 1 only: a Python Worker feasibility spike using synthetic data,
-`python-dateutil`, D1, a small `fetch()` result, and a scheduled-handler smoke
-test. This should answer whether Cloudflare can host the existing Python rules
-before the project spends effort translating logic or building a Telegram
-surface around an unproven runtime.
+Slice 6: close out pre-production migration readiness.
+
+Current status has reached the staging floor for Slice 5:
+
+- `PARTYMATH_DB` schema/table checks pass and webhook commands are processed from
+  `/telegram/webhook` against D1-backed tenant rows.
+- `/start` and `/list` command responses are flowing in Telegram after the D1
+  tenant-key binding fix; replay handling now uses D1 dedupe.
+- Scheduled reminder scaffolding is wired and writing per-chat chat settings and
+  delivery ledger rows.
+
+Remaining before Cutover Slice:
+
+- Run full add/find/delete fixture and migration rehearsal against an isolated test
+  tenant set in D1.
+- Finalize idempotent admin and staging runbook for `/admin/tenant-state`,
+  replay cleanup, and secret rotation.
+- Decide production bot naming and cutover path, then migrate from fixture data.
+
+Current implementation note:
+
+- Each private/group chat resolves a default tenant at command time and may have
+  additional linked tenants.
+- `chat_id + tenant_id` membership rows make tenant selection explicit and avoid
+  writing full tenant JSON snapshots on every mutation.
+- Delete confirmations are tied to `(chat_id, tenant_id)` so switching tenants
+  cannot confirm the wrong delete request.
+- `/start`-captured UTC reminder scheduling is now persisted in `partymath_chat_settings`,
+  and `scheduled()` drives per-chat due delivery through `partymath_delivery_ledger`.

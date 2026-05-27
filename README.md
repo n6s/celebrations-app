@@ -1,8 +1,53 @@
 TO DO:
 * Multi-tenant Telegram and Cloudflare direction is captured in `docs/telegram-cloudflare-roadmap.md`.
 * Current Cloudflare track: the `partymath` Worker is live on `workers.dev`, with Telegram bot and webhook secrets stored in Cloudflare and the webhook registered.
-* Next recommended slice: implement the first real Telegram command handlers on top of the Worker using synthetic data first.
+* Latest Cloudflare progress: tenant command handlers are implemented in `/telegram/webhook` for `/start`, `/today`, `/upcoming`, `/list`, `/find`, `/add`, and `/delete`, with shared mutation helpers in `celebrations_core.py`.
+* Added D1-backed tenant persistence (`PARTYMATH_DB`) and replay idempotency state, plus `/admin/tenant-state` diagnostics.
+* Added Cloudflare-side tenant switching via `/tenant` commands:
+  `/tenant list`, `/tenant create <name>`, `/tenant use <tenant-id>`, and `/tenant default`.
+* Implemented chat-to-tenant membership rows so each chat has a default workspace plus optional additional tenant contexts.
+* Confirmed `/start` command now returns live responses after the D1 schema-path fix (no undefined tenant_id path binding errors), and webhook updates are now replay-safe in production.
+* Added `/start`-seeded reminder scheduling and first-pass scheduled delivery in the Worker:
+  chat schedules live in `partymath_chat_settings` and daily delivery dedupe uses `partymath_delivery_ledger`.
+* Added cron trigger (`* * * * *`) for periodic scheduled run execution.
+* Next recommended slice: validate staging migration path using tenant-backed fixture data before any real tenant data migration.
 * Choose a new hosted-product name and separate Telegram bot for the Cloudflare track, leaving the existing local bot in service during development.
+
+Recommended local verification:
+* Run the verification script:
+  * `scripts/verify-cloudflare-worker.sh`
+* For full deploy + checks:
+  * `PARTYMATH_DEPLOY_WORKER=1 scripts/verify-cloudflare-worker.sh`
+* Optional env vars:
+* `PARTYMATH_WORKER_URL` (default `https://partymath.rogerpbrown.workers.dev`)
+* `PARTYMATH_D1_DATABASE_NAME` (default `partymath-cloudflare`)
+* `TELEGRAM_WEBHOOK_SECRET` (for webhook smoke request)
+* `PARTYMATH_ADMIN_TOKEN` (for admin endpoint smoke request)
+* `PARTYMATH_TEST_CHAT_ID` (chat id used by webhook smoke request)
+* `PARTYMATH_D1_DATABASE_NAME` maps to your Wrangler db binding name/ID, so an older account display name does not change behavior if the bound `database_id` is unchanged.
+
+### Quick local iteration with `.env`
+
+To avoid pasting env vars each run:
+
+1. `cp scripts/.env.example scripts/.env`
+2. Set values in `scripts/.env`
+3. Run:
+
+```bash
+PARTYMATH_DEPLOY_WORKER=0 PARTYMATH_WEBHOOK_SMOKE=0 scripts/verify-cloudflare-worker.sh
+```
+
+The script also auto-loads these files if present:
+* `.env`
+* `.env.cloudflare`
+* `scripts/.env`
+* `scripts/.env.cloudflare`
+* `deploy/cloudflare/.env`
+* `deploy/cloudflare/.env.cloudflare`
+
+If a secret is set in both a file and the command environment, the command env wins.
+`__REPLACE_ME__` values in these files are treated as unset.
 
 KNOWN ISSUES/LIMITATIONS:
 * Android soft keyboard quirks (Gboard / gesture typing not supported).
