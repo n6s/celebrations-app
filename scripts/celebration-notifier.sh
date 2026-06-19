@@ -11,6 +11,8 @@ send_tenant() {
   local env_file="$TENANTS_ROOT/$tenant/notifier.env"
   local message
   local nonempty_lines
+  local today_header="🎉 Today's Celebrations:"
+  local tenant_header="🎉 Today's Celebrations ($tenant):"
 
   if [[ ! -f "$env_file" ]]; then
     echo "Missing tenant notifier config: $env_file" >&2
@@ -26,10 +28,13 @@ send_tenant() {
   : "${BOT_TOKEN:?Missing BOT_TOKEN in $env_file}"
 
   message="$(python3 "$REPO_DIR/cli/celebrations.py" --tenant "$tenant")"
+  if [[ "$message" == "$today_header"* ]]; then
+    message="${tenant_header}${message#"$today_header"}"
+  fi
   nonempty_lines="$(printf '%s\n' "$message" | sed '/^[[:space:]]*$/d')"
 
-  if [[ "$nonempty_lines" == "🎉 Today's Celebrations:" ]]; then
-    message="🎉 Today's Celebrations:
+  if [[ "$nonempty_lines" == "$tenant_header" ]]; then
+    message="$tenant_header
 
 No events today."
   fi
