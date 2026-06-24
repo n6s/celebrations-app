@@ -7,6 +7,7 @@ from celebrations_core import (calculate_all_celebrations, get_today,
                                load_all_celebrations,
                                load_birthdays,
                                resolve_config_paths,
+                               tenant_display_name,
                                upcoming_budget_birthdays,
                                upcoming_celebrations,
                                upcoming_milestone_dates_for)
@@ -141,6 +142,7 @@ def get_monthly_budget_output(
         return ["❌ Monthly budget range must be at least 1 month."]
 
     today = date or get_today()
+    tenant_label = tenant_display_name(tenant) if tenant else None
 
     matches = []
     if name:
@@ -159,9 +161,11 @@ def get_monthly_budget_output(
     if name and len(matches) == 1:
         header = f"💸 Monthly birthday budget heads-up for {matches[0]['name']}:\n"
     elif months_ahead == 1:
-        header = "💸 Monthly birthday budget heads-up for the rest of this month:\n"
+        subject = f" for {tenant_label}" if tenant_label else ""
+        header = f"💸 Monthly birthday budget heads-up{subject} for the rest of this month:\n"
     else:
-        header = f"💸 Monthly birthday budget heads-up for the next {months_ahead} months:\n"
+        subject = f" for {tenant_label}" if tenant_label else ""
+        header = f"💸 Monthly birthday budget heads-up{subject} for the next {months_ahead} months:\n"
 
     messages = [header]
     current_month = None
@@ -212,6 +216,7 @@ def get_celebration_output(
             return [f"❌ Invalid date format: {date}. Please use YYYY-MM-DD."], []
 
     today = get_today()
+    tenant_label = tenant_display_name(tenant) if tenant else None
 
     date = date or today
     messages = []
@@ -235,7 +240,8 @@ def get_celebration_output(
     if days_ahead > 0:
         results = upcoming_celebrations(people, date, days_ahead=days_ahead)
         name_label = f" for {people[0]['name']}" if name and len(matches) == 1 else ""
-        header = f"🎈 Upcoming celebrations in the next {days_ahead} days{name_label}:\n"
+        tenant_subject = f" in {tenant_label}" if tenant_label and not name_label else ""
+        header = f"🎈 Upcoming celebrations{tenant_subject} in the next {days_ahead} days{name_label}:\n"
         messages.append(header)
         messages += extract_messages(results, category_filter=("date_header", "label", "celebration"), markup=markup)
         return messages, results
@@ -274,8 +280,10 @@ def get_celebration_output(
         header = f"🔍 Celebrations on {date} for {matches[0]['name']}:\n"
         messages.insert(0, header)
     elif date != today:
-        messages.insert(0, f"🔍 Celebrations on {date}:\n")
+        subject = f" for {tenant_label}" if tenant_label else ""
+        messages.insert(0, f"🔍 Celebrations on {date}{subject}:\n")
     else:
-        messages.insert(0, "🎉 Today's Celebrations:\n")
+        subject = f" ({tenant_label})" if tenant_label else ""
+        messages.insert(0, f"🎉 Today's Celebrations{subject}:\n")
 
     return messages, results

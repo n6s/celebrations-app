@@ -10,7 +10,9 @@ send_tenant() {
   local tenant="$1"
   local env_file="$TENANTS_ROOT/$tenant/notifier.env"
   local message
+  local first_line
   local nonempty_lines
+  local nonempty_count
   local today_header="🎉 Today's Celebrations:"
   local tenant_header="🎉 Today's Celebrations ($tenant):"
 
@@ -32,9 +34,11 @@ send_tenant() {
     message="${tenant_header}${message#"$today_header"}"
   fi
   nonempty_lines="$(printf '%s\n' "$message" | sed '/^[[:space:]]*$/d')"
+  first_line="$(printf '%s\n' "$nonempty_lines" | sed -n '1p')"
+  nonempty_count="$(printf '%s\n' "$nonempty_lines" | wc -l)"
 
-  if [[ "$nonempty_lines" == "$tenant_header" ]]; then
-    message="$tenant_header
+  if [[ "$nonempty_count" -eq 1 && "$first_line" == "🎉 Today's Celebrations"* ]]; then
+    message="$first_line
 
 No events today."
   fi

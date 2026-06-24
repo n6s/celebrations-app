@@ -10,6 +10,8 @@ TO DO:
 * Added `/start`-seeded reminder scheduling and first-pass scheduled delivery in the Worker:
   chat schedules live in `partymath_chat_settings` and daily delivery dedupe uses `partymath_delivery_ledger`.
 * Added cron trigger (`* * * * *`) for periodic scheduled run execution.
+* Local tenant directories can include `tenant.json` metadata. Set `display_name` there to use a friendlier Telegram/CLI header than the directory name.
+* Hosted Telegram tenants now keep separate stable names and friendly header names. Use `/tenant name <friendly-name>` to update the active tenant's display label.
 * Next recommended slice: validate staging migration path using tenant-backed fixture data before any real tenant data migration.
 * Choose a new hosted-product name and separate Telegram bot for the Cloudflare track, leaving the existing local bot in service during development.
 
@@ -152,6 +154,7 @@ Repo-managed notifier files:
 * Monthly budget systemd templates: `deploy/systemd/celebration-budget-notifier.service` and `deploy/systemd/celebration-budget-notifier.timer`
 * Installer: `scripts/install-user-files.sh [symlink|copy]`
 * Example tenant notifier config: `config/tenants/<tenant>/notifier.env.example`
+* Example tenant metadata config: `config/tenants/tenant.json.example`
 
 Recommended local deployment split:
 * Symlink or copy the script and systemd units from the repo into `~/bin` and `~/.config/systemd/user`

@@ -32,6 +32,7 @@ CONFIG_DIR = XDG_CONFIG_ROOT / "celebrations"
 CONFIG_PATH = CONFIG_DIR / "birthdays.json"
 ANNIVERSARIES_PATH = CONFIG_DIR / "anniversaries.json"
 TENANTS_DIR = CONFIG_DIR / "tenants"
+TENANT_METADATA_FILENAME = "tenant.json"
 MIN_SEQUENCE_LENGTH = 4
 MATH_CONSTANT_PREFIXES = {
     "Pi": ("🥧", "31415926535897932384626433832795"),
@@ -64,6 +65,30 @@ def normalize_tenant_name(tenant):
 def tenant_config_dir(tenant):
     tenant_name = normalize_tenant_name(tenant)
     return TENANTS_DIR / tenant_name if tenant_name else CONFIG_DIR
+
+def load_tenant_metadata(tenant):
+    tenant_name = normalize_tenant_name(tenant)
+    if not tenant_name:
+        return {}
+
+    metadata_path = tenant_config_dir(tenant_name) / TENANT_METADATA_FILENAME
+    if not metadata_path.exists():
+        return {}
+
+    with open(metadata_path, encoding='utf-8') as f:
+        metadata = json.load(f)
+    return metadata if isinstance(metadata, dict) else {}
+
+def tenant_display_name(tenant):
+    tenant_name = normalize_tenant_name(tenant)
+    if not tenant_name:
+        return None
+
+    metadata = load_tenant_metadata(tenant_name)
+    display_name = metadata.get("display_name") or metadata.get("name")
+    if isinstance(display_name, str) and display_name.strip():
+        return display_name.strip()
+    return tenant_name
 
 def resolve_config_paths(birthdays_path=None, anniversaries_path=None, tenant=None):
     tenant_name = normalize_tenant_name(tenant)

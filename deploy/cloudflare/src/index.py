@@ -160,6 +160,8 @@ def _new_tenant(chat_id: int) -> dict:
     return {
         "id": key,
         "name": label,
+        "display_name": label,
+        "metadata": "{}",
         "birthdays": copy.deepcopy(BASE_TENANT_BIRTHDAYS),
         "anniversaries": copy.deepcopy(BASE_TENANT_ANNIVERSARIES),
     }
@@ -167,6 +169,10 @@ def _new_tenant(chat_id: int) -> dict:
 
 def _tenant_name_for_chat(chat_key):
     return TENANT_LABELS.get(str(chat_key), f"Tenant Workspace {chat_key}")
+
+
+def _tenant_label_for_text(tenant):
+    return _tenant_display_name(tenant)
 
 
 def _get_db(env):
@@ -202,6 +208,8 @@ def _row_dict(row):
         "chat_id",
         "tenant_id",
         "tenant_name",
+        "tenant_display_name",
+        "tenant_metadata_json",
         "notify_hour",
         "notify_minute",
         "is_enabled",
@@ -240,6 +248,13 @@ def _delivery_date_for_now(now=None):
     return (now or datetime.now(timezone.utc)).date().isoformat()
 
 
+def _tenant_display_name(tenant):
+    if not isinstance(tenant, dict):
+        return ""
+    display_name = _db_key(tenant.get("display_name"))
+    return display_name or _db_key(tenant.get("name")) or _db_key(tenant.get("id")) or ""
+
+
 async def _has_column(db, table_name, column_name):
     rows = await db.prepare(f"PRAGMA table_info({table_name})").all()
     for row in getattr(rows, "results", []):
@@ -270,7 +285,9 @@ async def _ensure_storage_schema(db):
         (
             f"CREATE TABLE IF NOT EXISTS {PARTYMATH_TENANTS_TABLE} ("
             "tenant_id TEXT PRIMARY KEY, "
-            "tenant_name TEXT NOT NULL)"
+            "tenant_name TEXT NOT NULL, "
+            "tenant_display_name TEXT, "
+            "tenant_metadata_json TEXT)"
         ),
         (
             f"CREATE TABLE IF NOT EXISTS {PARTYMATH_ENTRIES_TABLE} ("
@@ -348,6 +365,15 @@ async def _ensure_storage_schema(db):
     for statement in statements:
         await db.prepare(statement).run()
 
+    if not await _has_column(db, PARTYMATH_TENANTS_TABLE, "tenant_display_name"):
+        await db.prepare(
+            f"ALTER TABLE {PARTYMATH_TENANTS_TABLE} ADD COLUMN tenant_display_name TEXT"
+        ).run()
+    if not await _has_column(db, PARTYMATH_TENANTS_TABLE, "tenant_metadata_json"):
+        await db.prepare(
+            f"ALTER TABLE {PARTYMATH_TENANTS_TABLE} ADD COLUMN tenant_metadata_json TEXT"
+        ).run()
+
 
 def _entry_to_row(tenant_key, entry):
     entry_id = _db_key(entry.get("entry_id"))
@@ -390,8 +416,11 @@ async def _seed_tenant_defaults(db, tenant_key, tenant_name, include_default_ent
     tenant_name = _db_key(tenant_name) or f"Tenant {tenant_key}"
 
     await db.prepare(
-        f"INSERT OR REPLACE INTO {PARTYMATH_TENANTS_TABLE}(tenant_id, tenant_name) "
-        "VALUES(?1, ?2)"
+        f"INSERT OR REPLACE INTO {PARTYMATH_TENANTS_TABLE}"
+        "(tenant_id, tenant_name, tenant_display_name, tenant_metadata_json) "
+        "VALUES(?1, ?2, "
+        f"COALESCE((SELECT tenant_display_name FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1), ?2), "
+        f"COALESCE((SELECT tenant_metadata_json FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1), '{{}}'))"
     ).bind(tenant_key, tenant_name).run()
 
     if not include_default_entries:
@@ -518,7 +547,7 @@ async def _ensure_chat_schedule(env, chat_key, message_timestamp=None):
 
 async def _list_due_chat_tenant_rows(db, now):
     rows = await db.prepare(
-        f"SELECT m.chat_id, m.tenant_id, t.tenant_name "
+        f"SELECT m.chat_id, m.tenant_id, t.tenant_name, t.tenant_display_name "
         f"FROM {PARTYMATH_TENANT_MEMBERSHIPS_TABLE} m "
         f"JOIN {PARTYMATH_CHAT_SETTINGS_TABLE} s ON s.chat_id = m.chat_id "
         f"LEFT JOIN {PARTYMATH_TENANTS_TABLE} t ON m.tenant_id = t.tenant_id "
@@ -531,6 +560,7 @@ async def _list_due_chat_tenant_rows(db, now):
             "chat_id": _row_value(row, "chat_id"),
             "tenant_id": _row_value(row, "tenant_id"),
             "tenant_name": _row_value(row, "tenant_name"),
+            "tenant_display_name": _row_value(row, "tenant_display_name"),
         })
     return due
 
@@ -561,7 +591,7 @@ def _tenant_today_lines_for_date(tenant, target_date):
     if not celebration_items:
         return []
 
-    lines = [f"🎉 Today's celebrations for {tenant['name']} ({target_date}):"]
+    lines = [f"🎉 Today's celebrations for {_tenant_label_for_text(tenant)} ({target_date}):"]
     lines.extend(_format_celebration_messages(celebration_items))
     return lines
 
@@ -572,13 +602,16 @@ async def _load_tenant_from_db(db, chat_key):
         return None
 
     tenant_row = await db.prepare(
-        f"SELECT tenant_name FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1"
+        f"SELECT tenant_name, tenant_display_name, tenant_metadata_json "
+        f"FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1"
     ).bind(tenant_key).first()
 
     if not tenant_row:
         return None
 
     tenant_name = _row_value(tenant_row, "tenant_name")
+    tenant_display_name = _row_value(tenant_row, "tenant_display_name")
+    tenant_metadata_json = _row_value(tenant_row, "tenant_metadata_json")
     rows = await db.prepare(
         f"SELECT * FROM {PARTYMATH_ENTRIES_TABLE} WHERE tenant_id = ?1"
     ).bind(tenant_key).all()
@@ -593,7 +626,14 @@ async def _load_tenant_from_db(db, chat_key):
         else:
             birthdays.append(entry)
 
-    return {"id": chat_key, "name": tenant_name, "birthdays": birthdays, "anniversaries": anniversaries}
+    return {
+        "id": chat_key,
+        "name": tenant_name,
+        "display_name": tenant_display_name,
+        "metadata": tenant_metadata_json,
+        "birthdays": birthdays,
+        "anniversaries": anniversaries,
+    }
 
 
 def _tenant_membership_key(chat_key, tenant_id):
@@ -651,6 +691,8 @@ async def _create_tenant_record(db, tenant_name, include_default_entries=False):
     return {
         "id": tenant_id,
         "name": tenant_name,
+        "display_name": tenant_name,
+        "metadata": "{}",
         "birthdays": [],
         "anniversaries": [],
     }
@@ -700,6 +742,34 @@ async def _set_default_tenant_for_chat(db, chat_key, tenant_id):
     return True
 
 
+async def _set_tenant_display_name(db, tenant_id, display_name):
+    tenant_id = _db_key(tenant_id)
+    display_name = _db_key(display_name)
+    if tenant_id is None or display_name is None:
+        return None
+
+    row = await db.prepare(
+        f"SELECT tenant_id, tenant_metadata_json FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1"
+    ).bind(tenant_id).first()
+    if not row:
+        return None
+
+    try:
+        metadata_payload = json.loads(_row_value(row, "tenant_metadata_json") or "{}")
+    except (TypeError, JSONDecodeError):
+        metadata_payload = {}
+    if not isinstance(metadata_payload, dict):
+        metadata_payload = {}
+    metadata_payload["display_name"] = display_name
+    metadata = json.dumps(metadata_payload, separators=(",", ":"))
+    await db.prepare(
+        f"UPDATE {PARTYMATH_TENANTS_TABLE} "
+        "SET tenant_display_name = ?2, tenant_metadata_json = ?3 "
+        "WHERE tenant_id = ?1"
+    ).bind(tenant_id, display_name, metadata).run()
+    return await _load_tenant_from_db(db, tenant_id)
+
+
 async def _list_chat_tenants(db, chat_key):
     chat_key = _db_key(chat_key)
     if chat_key is None:
@@ -707,7 +777,7 @@ async def _list_chat_tenants(db, chat_key):
         return []
 
     rows = await db.prepare(
-        f"SELECT m.tenant_id, m.is_default, t.tenant_name, "
+        f"SELECT m.tenant_id, m.is_default, t.tenant_name, t.tenant_display_name, "
         f"(SELECT COUNT(*) FROM {PARTYMATH_ENTRIES_TABLE} WHERE tenant_id = m.tenant_id) "
         f"AS entry_count "
         f"FROM {PARTYMATH_TENANT_MEMBERSHIPS_TABLE} m "
@@ -720,6 +790,7 @@ async def _list_chat_tenants(db, chat_key):
         tenants.append({
             "tenant_id": tenant_id,
             "tenant_name": _row_value(row, "tenant_name"),
+            "tenant_display_name": _row_value(row, "tenant_display_name"),
             "is_default": bool(_row_value(row, "is_default")),
             "entry_count": _row_value(row, "entry_count") or 0,
         })
@@ -884,6 +955,7 @@ def _handle_start():
             "/tenant\n"
             "/tenant list\n"
             "/tenant create <name>\n"
+            "/tenant name <friendly-name>\n"
             "/tenant use <tenant-id>\n"
             "/tenant default\n"
             "/today\n"
@@ -900,10 +972,11 @@ def _handle_start():
 
 def _message_for_list(tenant: dict):
     entries = _all_entries(tenant)
+    tenant_label = _tenant_label_for_text(tenant)
     if not entries:
-        return {"text": f"📋 No celebrations configured for {tenant['name']}."}
+        return {"text": f"📋 No celebrations configured for {tenant_label}."}
 
-    lines = [f"📋 Celebrations in {tenant['name']}:"]
+    lines = [f"📋 Celebrations in {tenant_label}:"]
     for entry in sorted(entries, key=lambda item: (item.get("entry_type", ""), item.get("name", "").lower())):
         lines.append(_format_entry_line(entry))
     return {"text": "\n".join(lines)}
@@ -933,7 +1006,7 @@ def _message_for_find(tenant: dict, args: str):
     if not matches:
         return {"text": f"No matches found for '{args}'."}
 
-    lines = [f"🔍 Matches for '{args}' in {tenant['name']}:"]
+    lines = [f"🔍 Matches for '{args}' in {_tenant_label_for_text(tenant)}:"]
     for entry in sorted(matches, key=lambda item: item.get("name", "").lower()):
         lines.append(_format_entry_line(entry))
     return {"text": "\n".join(lines)}
@@ -943,7 +1016,7 @@ def _message_for_tenant_today(tenant: dict, target_date=None):
     today = target_date or get_today()
     celebration_lines = _tenant_today_lines_for_date(tenant, today)
     if not celebration_lines:
-        return {"text": f"🎉 No celebrations today for {tenant['name']}."}
+        return {"text": f"🎉 No celebrations today for {_tenant_label_for_text(tenant)}."}
     return {"text": "\n".join(celebration_lines)}
 
 
@@ -956,9 +1029,9 @@ def _message_for_upcoming(tenant: dict, args: str):
     all_entries = _all_entries(tenant)
     celebration_items = upcoming_celebrations(all_entries, today, days_ahead=days)
     if not celebration_items:
-        return {"text": f"📅 No celebrations in the next {days} days for {tenant['name']}."}
+        return {"text": f"📅 No celebrations in the next {days} days for {_tenant_label_for_text(tenant)}."}
 
-    lines = [f"📅 Upcoming celebrations in the next {days} days for {tenant['name']}:"]
+    lines = [f"📅 Upcoming celebrations in the next {days} days for {_tenant_label_for_text(tenant)}:"]
     lines.extend(_format_celebration_messages(celebration_items))
     return {"text": "\n".join(lines)}
 
@@ -995,7 +1068,7 @@ async def _message_for_add(env, tenant: dict, args: str):
         if db:
             await _ensure_storage_schema_once(db)
             await _save_entry_to_db(db, tenant["id"], entry)
-        return {"text": f"✅ Added birthday '{name}' with id {entry['id']} for {tenant['name']}."}
+        return {"text": f"✅ Added birthday '{name}' with id {entry['id']} for {_tenant_label_for_text(tenant)}."}
 
     kind = rest[1] if len(rest) > 1 and rest[1] else "wedding_anniversary"
     entry = create_anniversary_entry(
@@ -1009,7 +1082,7 @@ async def _message_for_add(env, tenant: dict, args: str):
     if db:
         await _ensure_storage_schema_once(db)
         await _save_entry_to_db(db, tenant["id"], entry)
-    return {"text": f"✅ Added anniversary '{name}' with id {entry['id']} for {tenant['name']}."}
+    return {"text": f"✅ Added anniversary '{name}' with id {entry['id']} for {_tenant_label_for_text(tenant)}."}
 
 
 async def _is_duplicate_update_db(db, update_id: int | None) -> bool:
@@ -1243,11 +1316,13 @@ async def _list_tenant_state(env, tenant_filter=None):
 
     if tenant_filter:
         tenant_rows = await db.prepare(
-            f"SELECT tenant_id, tenant_name FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1"
+            f"SELECT tenant_id, tenant_name, tenant_display_name, tenant_metadata_json "
+            f"FROM {PARTYMATH_TENANTS_TABLE} WHERE tenant_id = ?1"
         ).bind(tenant_filter).all()
     else:
         tenant_rows = await db.prepare(
-            f"SELECT tenant_id, tenant_name FROM {PARTYMATH_TENANTS_TABLE} ORDER BY tenant_id"
+            f"SELECT tenant_id, tenant_name, tenant_display_name, tenant_metadata_json "
+            f"FROM {PARTYMATH_TENANTS_TABLE} ORDER BY tenant_id"
         ).all()
     replay_row = await db.prepare(
         f"SELECT COUNT(*) as count FROM {PARTYMATH_REPLAY_TABLE}"
@@ -1264,6 +1339,7 @@ async def _list_tenant_state(env, tenant_filter=None):
     for row in getattr(tenant_rows, "results", []):
         tenant_id = _row_value(row, "tenant_id")
         tenant_name = _row_value(row, "tenant_name")
+        tenant_display_name = _row_value(row, "tenant_display_name")
         if not tenant_id:
             continue
 
@@ -1280,6 +1356,8 @@ async def _list_tenant_state(env, tenant_filter=None):
         tenants.append({
             "tenant_id": tenant_id,
             "tenant_name": tenant_name,
+            "tenant_display_name": tenant_display_name,
+            "tenant_metadata_json": _row_value(row, "tenant_metadata_json"),
             "entries": _row_value(entries, "count") or 0,
             "pending_deletes": _row_value(pending, "count") or 0,
             "chat_memberships": _row_value(members, "count") or 0,
@@ -1326,9 +1404,10 @@ async def _run_scheduled_deliveries(env, now=None):
         chat_id = row.get("chat_id")
         tenant_id = row.get("tenant_id")
         tenant_name = row.get("tenant_name")
+        tenant_display_name = row.get("tenant_display_name")
         if not chat_id or not tenant_id:
             continue
-        chats.setdefault(chat_id, []).append((tenant_id, tenant_name))
+        chats.setdefault(chat_id, []).append((tenant_id, tenant_name, tenant_display_name))
 
     if not chats:
         return {"ok": True, "scheduled": 0, "sent": 0, "skipped": 0, "failed": 0, "message": "No tenants due"}
@@ -1340,7 +1419,7 @@ async def _run_scheduled_deliveries(env, now=None):
     for chat_id, tenant_rows in chats.items():
         telegram_text_parts = []
         tenant_ids_for_send = []
-        for tenant_id, tenant_name in tenant_rows:
+        for tenant_id, tenant_name, tenant_display_name in tenant_rows:
             if await _has_delivered_today(db, chat_id, tenant_id, delivery_date):
                 skipped += 1
                 continue
@@ -1355,7 +1434,9 @@ async def _run_scheduled_deliveries(env, now=None):
                 skipped += 1
                 continue
 
-            if tenant_name and tenant.get("name") != tenant_name:
+            if tenant_display_name and tenant.get("display_name") != tenant_display_name:
+                tenant_lines.insert(0, f"🏢 {tenant_display_name}")
+            elif tenant_name and tenant.get("name") != tenant_name:
                 tenant_lines.insert(0, f"🏢 {tenant_name}")
             tenant_ids_for_send.append(tenant_id)
             telegram_text_parts.append("\n".join(tenant_lines))
@@ -1428,7 +1509,7 @@ async def _message_for_delete(tenant: dict, args: str, chat_key: str, env):
     if db:
         await _ensure_storage_schema_once(db)
         await _delete_entry_from_db(db, tenant["id"], entry_id)
-    return {"text": f"🗑️ Deleted '{entry.get('name')}' ({entry_id}) from {tenant['name']}."}
+    return {"text": f"🗑️ Deleted '{entry.get('name')}' ({entry_id}) from {_tenant_label_for_text(tenant)}."}
 
 
 async def _message_for_tenant_command(env, chat_id, args: str):
@@ -1446,6 +1527,7 @@ async def _message_for_tenant_command(env, chat_id, args: str):
                 "Usage:\n"
                 "/tenant list\n"
                 "/tenant create <name>\n"
+                "/tenant name <friendly-name>\n"
                 "/tenant use <tenant-id>\n"
                 "/tenant default"
             )
@@ -1458,13 +1540,18 @@ async def _message_for_tenant_command(env, chat_id, args: str):
             memberships = [{
                 "tenant_id": tenant["id"],
                 "tenant_name": tenant["name"],
+                "tenant_display_name": tenant.get("display_name"),
                 "is_default": True,
                 "entry_count": len(_all_entries(tenant)),
             }]
         lines = [f"🏢 Tenants for chat {chat_key}:"]
         for membership in memberships:
             default_marker = "✅" if membership.get("is_default") else "  "
-            tenant_name = membership.get("tenant_name") or "(no name)"
+            tenant_name = (
+                membership.get("tenant_display_name")
+                or membership.get("tenant_name")
+                or "(no name)"
+            )
             lines.append(
                 f"{default_marker} {membership.get('tenant_id')} — "
                 f"{tenant_name} ({membership.get('entry_count', 0)} items)"
@@ -1473,7 +1560,7 @@ async def _message_for_tenant_command(env, chat_id, args: str):
 
     if action == "default":
         tenant = await _tenant_for_chat(chat_id, env)
-        return {"text": f"🏠 Active tenant: {tenant['id']} ({tenant['name']})."}
+        return {"text": f"🏠 Active tenant: {tenant['id']} ({_tenant_label_for_text(tenant)})."}
 
     if action == "create":
         tenant_name = (raw_value or "").strip() or f"Tenant for {chat_key}"
@@ -1481,10 +1568,21 @@ async def _message_for_tenant_command(env, chat_id, args: str):
         await _attach_tenant_to_chat(db, chat_key, tenant["id"], make_default=False)
         return {
             "text": (
-                f"✅ Created tenant '{tenant['name']}' with id {tenant['id']}.\n"
+                f"✅ Created tenant '{_tenant_label_for_text(tenant)}' with id {tenant['id']}.\n"
                 "Use /tenant use <tenant-id> to switch."
             )
         }
+
+    if action == "name":
+        display_name = (raw_value or "").strip()
+        if not display_name:
+            return {"text": "Usage: /tenant name <friendly-name>"}
+
+        tenant = await _tenant_for_chat(chat_id, env)
+        updated = await _set_tenant_display_name(db, tenant["id"], display_name)
+        if not updated:
+            return {"text": "⚠️ Could not update the active tenant name."}
+        return {"text": f"✅ Tenant header name set to '{_tenant_label_for_text(updated)}'."}
 
     if action == "use":
         tenant_id = (raw_value or "").strip()
@@ -1513,9 +1611,9 @@ async def _message_for_tenant_command(env, chat_id, args: str):
             }
 
         await _set_default_tenant_for_chat(db, chat_key, tenant_id)
-        return {"text": f"✅ Active tenant switched to '{tenant['name']}' ({tenant_id})."}
+        return {"text": f"✅ Active tenant switched to '{_tenant_label_for_text(tenant)}' ({tenant_id})."}
 
-    return {"text": "Unknown tenant command. Try /tenant list, create, use, or default."}
+    return {"text": "Unknown tenant command. Try /tenant list, create, name, use, or default."}
 
 
 async def _message_for_command(command: str, args: str, tenant: dict, chat_id: int, env):
