@@ -2,6 +2,7 @@
 # pylint: disable=line-too-long,missing-function-docstring,too-many-locals,too-many-branches,too-many-statements
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # Add celebrations-app/ to path
@@ -183,6 +184,20 @@ def main():
         name = input("Name: ").strip()
         nickname = input("Nickname: ").strip()
         birthdate = input("Birthdate (YYYY-MM-DD): ").strip()
+        try:
+            parsed_birthdate = datetime.strptime(birthdate, "%Y-%m-%d").date()
+        except ValueError:
+            print("❌ Invalid birthdate. Please use YYYY-MM-DD (e.g., 2024-10-31).")
+            return
+
+        today = get_today()
+        if parsed_birthdate > today:
+            confirmation = input(
+                f"⚠️  {birthdate} is in the future. Save this birthday anyway? (y/N): "
+            ).strip().lower()
+            if confirmation not in ("y", "yes"):
+                print("Birthday not added.")
+                return
         hint = input("Hint (optional): ").strip()
         gender = input("Gender (m/f, optional): ").strip().lower()
         nonhuman = input("Is nonhuman? (y/N): ").strip().lower() == 'y'
